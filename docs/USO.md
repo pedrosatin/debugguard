@@ -14,12 +14,17 @@ Ao abrir **Gov.br / CAIXA / FGTS**:
 2. Reabre o app bancário (a Action da Samsung cancela a biometria; o relançamento devolve a tela)
 3. Quando **Settings/launcher** fica na frente **e** esse evento é recente (últimos ~20 s) **ou** você toca em **Restaurar**, o ADB volta (~10 s de confirmação)
 
-## Notificações (1.4.5+)
+## Notificações (1.4.8)
 
-- Canais **silenciosos** (sem som/vibração), importância mínima.
-- A notificação extra “ADB pausado” fica **desligada** por padrão (o Guard já tem aviso mínimo + Restaurar).
-- No app: interruptor **Notificação extra de pausa**.
-- Para sumir da barra: Configurações → Apps → DebugGuard → Notificações → canal do Guard.
+Toggles no app (padrão: tudo off — painel limpo):
+
+- **Mostrar no painel (perfil seguro)** — aviso contínuo no dia a dia
+- **Mostrar durante pausa ADB** — aviso + Restaurar enquanto o banco está pausado
+- **Notificação extra de pausa** — segunda notificação
+- **Som / vibração** — canais com som
+- Botão para **configurações de notificação do sistema**
+
+Com os toggles off, o Guard remove a entrada do painel após o start obrigatório do Android.
 
 **1.4.5:** empate launcher/CAIXA (~6 ms) → restore no meio da sessão.
 

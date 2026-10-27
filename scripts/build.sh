@@ -2,8 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION_NAME="${VERSION_NAME:-1.4.7}"
-VERSION_CODE="${VERSION_CODE:-17}"
+VERSION_NAME="${VERSION_NAME:-1.4.8}"
+VERSION_CODE="${VERSION_CODE:-18}"
 
 sdk_path="${DEBUGGUARD_SDK:-$HOME/.cache/debugguard-sdk}"
 platform="$sdk_path/platforms/android-36/android.jar"

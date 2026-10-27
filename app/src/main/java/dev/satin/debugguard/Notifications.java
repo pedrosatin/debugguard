@@ -8,8 +8,8 @@ import android.content.Context;
 import android.content.Intent;
 
 final class Notifications {
-    /** New id so importance drops to MIN (Android ignores importance changes on old ids). */
-    private static final String CHANNEL = "pending_restore_silent";
+    private static final String CHANNEL_SILENT = "pending_restore_silent";
+    private static final String CHANNEL_SOUND = "pending_restore_sound";
     private static final String LEGACY_CHANNEL = "pending_restore";
     private static final int ID = 49;
 
@@ -19,12 +19,13 @@ final class Notifications {
             return;
         }
         NotificationManager manager = context.getSystemService(NotificationManager.class);
-        ensureSilentChannel(manager);
+        boolean sound = Prefs.notificationSound(context);
+        String channelId = ensureChannel(manager, sound);
         PendingIntent open = PendingIntent.getActivity(context, 0,
             new Intent(context, MainActivity.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent restore = PendingIntent.getBroadcast(context, 1,
             new Intent(context, RestoreReceiver.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification.Builder builder = new Notification.Builder(context, CHANNEL)
+        Notification.Builder builder = new Notification.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle(failure ? "Falha ao restaurar ADB" : "ADB pausado para o banco")
             .setContentText(failure
@@ -33,9 +34,10 @@ final class Notifications {
             .setContentIntent(open)
             .setOngoing(!failure)
             .setOnlyAlertOnce(true)
-            .setDefaults(0)
-            .setSound(null)
             .setCategory(Notification.CATEGORY_SERVICE);
+        if (!sound) {
+            builder.setDefaults(0).setSound(null);
+        }
         if (!failure) {
             builder.addAction(new Notification.Action.Builder(null, "Restaurar", restore).build());
         }
@@ -46,14 +48,23 @@ final class Notifications {
         context.getSystemService(NotificationManager.class).cancel(ID);
     }
 
-    private static void ensureSilentChannel(NotificationManager manager) {
+    private static String ensureChannel(NotificationManager manager, boolean sound) {
         manager.deleteNotificationChannel(LEGACY_CHANNEL);
+        manager.deleteNotificationChannel(sound ? CHANNEL_SILENT : CHANNEL_SOUND);
+        String id = sound ? CHANNEL_SOUND : CHANNEL_SILENT;
         NotificationChannel channel = new NotificationChannel(
-                CHANNEL, "Restauração (silencioso)", NotificationManager.IMPORTANCE_MIN);
+                id,
+                sound ? "Restauração" : "Restauração (silencioso)",
+                sound ? NotificationManager.IMPORTANCE_DEFAULT : NotificationManager.IMPORTANCE_MIN);
         channel.setShowBadge(false);
-        channel.setSound(null, null);
-        channel.enableVibration(false);
-        channel.enableLights(false);
+        if (sound) {
+            channel.enableVibration(true);
+        } else {
+            channel.setSound(null, null);
+            channel.enableVibration(false);
+            channel.enableLights(false);
+        }
         manager.createNotificationChannel(channel);
+        return id;
     }
 }

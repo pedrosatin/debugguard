@@ -2,14 +2,17 @@ package dev.satin.debugguard;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.content.res.TypedArray;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -22,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 public final class MainActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -152,30 +156,50 @@ public final class MainActivity extends Activity {
         root.addView(sectionTitle("Notificações"));
         root.addView(gap(8));
         root.addView(label(
-                "O Android exige um aviso mínimo enquanto o Guard roda (canal silencioso, sem som).",
+                "Por padrão nada fica no painel. O Android pode exigir um flash mínimo ao iniciar o Guard.",
                 12, colorMuted, false));
         root.addView(gap(10));
-        LinearLayout notifRow = row();
-        notifRow.setGravity(Gravity.CENTER_VERTICAL);
-        TextView notifLabel = label("Notificação extra de pausa", 14, colorInk, false);
-        notifLabel.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        Switch extraPauseSwitch = new Switch(this);
-        extraPauseSwitch.setChecked(Prefs.extraPauseNotification(this));
-        extraPauseSwitch.setOnCheckedChangeListener((button, checked) -> {
-            Prefs.setExtraPauseNotification(this, checked);
-            if (!checked) Notifications.clear(this);
-            messageText.setText(checked
-                    ? "Notificação extra ligada (ainda silenciosa)."
-                    : "Só o aviso mínimo do Guard.");
-            messageText.setTextColor(colorMuted);
-        });
-        notifRow.addView(notifLabel);
-        notifRow.addView(extraPauseSwitch);
-        root.addView(notifRow);
-        root.addView(gap(6));
-        root.addView(label(
-                "Desligado = menos ícones. Em Configurações → Apps → DebugGuard → Notificações você pode ocultar o canal do Guard na barra.",
-                12, colorMuted, false));
+        root.addView(prefSwitch(
+                "Mostrar no painel (perfil seguro)",
+                Prefs.showInPanel(this),
+                checked -> {
+                    Prefs.setShowInPanel(this, checked);
+                    GuardService.refreshFromPrefs(this);
+                    tip(checked ? "Aviso contínuo no painel." : "Painel limpo no dia a dia.");
+                }));
+        root.addView(gap(8));
+        root.addView(prefSwitch(
+                "Mostrar durante pausa ADB",
+                Prefs.showDuringPause(this),
+                checked -> {
+                    Prefs.setShowDuringPause(this, checked);
+                    GuardService.refreshFromPrefs(this);
+                    tip(checked
+                            ? "Mostra ADB pausado + Restaurar no painel."
+                            : "Sem aviso de pausa no painel (Restaurar pelo app).");
+                }));
+        root.addView(gap(8));
+        root.addView(prefSwitch(
+                "Notificação extra de pausa",
+                Prefs.extraPauseNotification(this),
+                checked -> {
+                    Prefs.setExtraPauseNotification(this, checked);
+                    if (!checked) Notifications.clear(this);
+                    tip(checked ? "Segunda notificação de pausa ligada." : "Notificação extra off.");
+                }));
+        root.addView(gap(8));
+        root.addView(prefSwitch(
+                "Som / vibração",
+                Prefs.notificationSound(this),
+                checked -> {
+                    Prefs.setNotificationSound(this, checked);
+                    GuardService.refreshFromPrefs(this);
+                    tip(checked ? "Canais com som." : "Canais silenciosos.");
+                }));
+        root.addView(gap(12));
+        TextView openNotifSettings = quietButton("Configurações de notificação do sistema");
+        openNotifSettings.setOnClickListener(v -> openSystemNotificationSettings());
+        root.addView(openNotifSettings);
         root.addView(gap(16));
 
         messageText = label("", 13, colorMuted, false);
@@ -322,6 +346,37 @@ public final class MainActivity extends Activity {
         safeButton.setEnabled(!busy);
         pauseButton.setEnabled(!busy);
         restoreButton.setEnabled(!busy);
+    }
+
+    private View prefSwitch(String title, boolean checked, Consumer<Boolean> onChange) {
+        LinearLayout row = row();
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        TextView labelView = label(title, 14, colorInk, false);
+        labelView.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Switch sw = new Switch(this);
+        sw.setChecked(checked);
+        sw.setOnCheckedChangeListener((button, value) -> onChange.accept(value));
+        row.addView(labelView);
+        row.addView(sw);
+        return row;
+    }
+
+    private void tip(String text) {
+        if (messageText == null) return;
+        messageText.setText(text);
+        messageText.setTextColor(colorMuted);
+    }
+
+    private void openSystemNotificationSettings() {
+        Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+        intent.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+        try {
+            startActivity(intent);
+        } catch (Exception e) {
+            Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            fallback.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(fallback);
+        }
     }
 
     private TextView sectionTitle(String value) {

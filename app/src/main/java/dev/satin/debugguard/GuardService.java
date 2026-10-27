@@ -23,8 +23,9 @@ import android.util.Log;
  */
 public final class GuardService extends Service {
     private static final String TAG = "DebugGuard.Guard";
-    /** New id: IMPORTANCE_MIN (legacy channel stayed LOW/noisy on upgrade). */
+    /** Silent channel (default). */
     private static final String CHANNEL = "guard_silent";
+    private static final String CHANNEL_SOUND = "guard_sound";
     private static final String LEGACY_CHANNEL = "safe_profile_guard";
     private static final int NOTIFICATION_ID = 47;
     private static final long POLL_MS = 2000L;
@@ -39,6 +40,7 @@ public final class GuardService extends Service {
     private int idlePolls;
     private long pauseSeenAt;
     private Boolean lastNotifPaused;
+    private Boolean lastNotifShown;
     private final Runnable pollBanks = new Runnable() {
         @Override public void run() {
             try {
@@ -62,7 +64,11 @@ public final class GuardService extends Service {
         boolean paused = pauseActive();
         if (paused && pauseSeenAt == 0L) pauseSeenAt = System.currentTimeMillis();
         if (!paused) pauseSeenAt = 0L;
+        // startForegroundService requires a notification once; hide right away if toggles off.
+        lastNotifPaused = null;
+        lastNotifShown = null;
         startForeground(NOTIFICATION_ID, buildNotification(paused));
+        applyNotificationVisibility(paused);
         registerObserver();
         handler.removeCallbacks(pollBanks);
         handler.post(pollBanks);
@@ -195,32 +201,63 @@ public final class GuardService extends Service {
     }
 
     private void updateNotification(boolean paused) {
-        if (lastNotifPaused != null && lastNotifPaused == paused) return;
+        boolean wantShow = Prefs.shouldShowGuardNotification(this, paused);
+        if (lastNotifPaused != null && lastNotifPaused == paused
+                && lastNotifShown != null && lastNotifShown == wantShow) {
+            return;
+        }
         lastNotifPaused = paused;
-        getSystemService(NotificationManager.class).notify(NOTIFICATION_ID, buildNotification(paused));
+        lastNotifShown = wantShow;
+        applyNotificationVisibility(paused);
+    }
+
+    /** Promote or remove the shade entry according to toggles. */
+    private void applyNotificationVisibility(boolean paused) {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (Prefs.shouldShowGuardNotification(this, paused)) {
+            startForeground(NOTIFICATION_ID, buildNotification(paused));
+        } else {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            manager.cancel(NOTIFICATION_ID);
+        }
+    }
+
+    /** Called from the UI when notification prefs change. */
+    public static void refreshFromPrefs(Context context) {
+        start(context);
     }
 
     private Notification buildNotification(boolean paused) {
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.deleteNotificationChannel(LEGACY_CHANNEL);
+        boolean sound = Prefs.notificationSound(this);
+        String channelId = sound ? CHANNEL_SOUND : CHANNEL;
+        manager.deleteNotificationChannel(sound ? CHANNEL : CHANNEL_SOUND);
         NotificationChannel channel = new NotificationChannel(
-                CHANNEL, "DebugGuard (silencioso)", NotificationManager.IMPORTANCE_MIN);
+                channelId,
+                sound ? "DebugGuard" : "DebugGuard (silencioso)",
+                sound ? NotificationManager.IMPORTANCE_DEFAULT : NotificationManager.IMPORTANCE_MIN);
         channel.setShowBadge(false);
-        channel.setSound(null, null);
-        channel.enableVibration(false);
-        channel.enableLights(false);
+        if (sound) {
+            channel.enableVibration(true);
+        } else {
+            channel.setSound(null, null);
+            channel.enableVibration(false);
+            channel.enableLights(false);
+        }
         manager.createNotificationChannel(channel);
         PendingIntent open = PendingIntent.getActivity(
                 this, 0, new Intent(this, MainActivity.class),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification.Builder builder = new Notification.Builder(this, CHANNEL)
+        Notification.Builder builder = new Notification.Builder(this, channelId)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(open)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
-                .setDefaults(0)
-                .setSound(null)
                 .setCategory(Notification.CATEGORY_SERVICE);
+        if (!sound) {
+            builder.setDefaults(0).setSound(null);
+        }
         if (paused) {
             PendingIntent restore = PendingIntent.getBroadcast(
                     this, 1, new Intent(this, RestoreReceiver.class),
