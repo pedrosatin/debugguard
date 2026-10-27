@@ -2,8 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION_NAME="${VERSION_NAME:-1.4.8}"
-VERSION_CODE="${VERSION_CODE:-18}"
+VERSION_NAME="${VERSION_NAME:-1.4.9}"
+VERSION_CODE="${VERSION_CODE:-19}"
 
 sdk_path="${DEBUGGUARD_SDK:-$HOME/.cache/debugguard-sdk}"
 platform="$sdk_path/platforms/android-36/android.jar"
@@ -25,13 +25,9 @@ public final class BuildInfo {
 EOF
 
 mkdir -p build/classes build/dex build/compiled-res
-rm -f build/compiled-res/*
-"$tools/aapt2" compile -o build/compiled-res/ app/src/main/res/values/strings.xml
-"$tools/aapt2" compile -o build/compiled-res/ app/src/main/res/values/colors.xml
-"$tools/aapt2" compile -o build/compiled-res/ app/src/main/res/values/themes.xml
-"$tools/aapt2" compile -o build/compiled-res/ app/src/main/res/values-night/themes.xml
-"$tools/aapt2" compile -o build/compiled-res/ app/src/main/res/xml/shortcuts.xml
-mapfile -t flat_res < <(find build/compiled-res -type f -name '*.flat' | sort)
+rm -rf build/compiled-res
+mkdir -p build/compiled-res
+"$tools/aapt2" compile --dir app/src/main/res -o build/compiled-res/res.zip
 "$tools/aapt2" link -o build/unsigned.apk \
   --manifest app/src/main/AndroidManifest.xml \
   -I "$platform" \
@@ -39,7 +35,7 @@ mapfile -t flat_res < <(find build/compiled-res -type f -name '*.flat' | sort)
   --target-sdk-version 35 \
   --version-code "$VERSION_CODE" \
   --version-name "$VERSION_NAME" \
-  "${flat_res[@]}"
+  build/compiled-res/res.zip
 javac --release 17 -cp "$platform" -d build/classes app/src/main/java/dev/satin/debugguard/*.java
 jar cf build/classes.jar -C build/classes .
 "$tools/d8" --lib "$platform" --min-api 29 --output build/dex build/classes.jar

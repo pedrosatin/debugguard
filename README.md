@@ -2,7 +2,7 @@
 
 App local para usar Gov.br / CAIXA / FGTS no Galaxy S25 **sem desligar** a depuração USB/Wi‑Fi nem perder as animações em `0,5×`.
 
-Versão atual: **1.4.8** (`versionCode` 18). Tema `DeviceDefault.DayNight` (claro/escuro do sistema).
+Versão atual: **1.4.9** (`versionCode` 19). Tema `DeviceDefault.DayNight` (claro/escuro do sistema). Ícone próprio na home.
 
 Rollback estável: release [v1.4.4](https://github.com/pedrosatin/debugguard/releases/tag/v1.4.4) · fluxo CAIXA validado também em [v1.4.7](https://github.com/pedrosatin/debugguard/releases/tag/v1.4.7).
 
