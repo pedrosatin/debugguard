@@ -116,29 +116,31 @@ final class BankResume {
     };
 
     /**
+     * Foreign app must beat the bank by this much to count as "left".
+     * Launch/CLEAR_TASK races left launcher ~6ms ahead of CAIXA while the user
+     * was still in the bank; Guard then restored after grace (1.4.5 log).
+     */
+    private static final long LEAVE_MARGIN_MS = 5_000L;
+
+    /**
      * Whether a bank session is still active.
      * <p>
-     * Comparing a bank package's own {@code ACTIVITY_RESUMED} vs
-     * {@code ACTIVITY_STOPPED} is wrong for multi-activity apps: CAIXA stops
-     * the launcher activity after resuming the next one, so STOPPED timestamps
-     * win while the user is still inside the bank — Guard then restored ADB
-     * mid-session (~90s). Instead: session stays active while the latest
-     * non-transient {@code ACTIVITY_RESUMED} is a bank package (or no foreign
-     * app has resumed since the bank did).
+     * Fail closed toward "still in session" when signals disagree. A foreign
+     * package only ends the session when it is clearly newer than the bank
+     * ({@link #LEAVE_MARGIN_MS}), so trampoline/launcher blips do not restore ADB.
      */
     static boolean isBankVisible(Context context) {
         Boolean fromStats = bankInSessionByStats(context);
         Boolean fromEvents = bankInSessionByEvents(context);
         Log.i(TAG, "session signals stats=" + fromStats + " events=" + fromEvents);
 
-        // UsageStats lastTimeVisible tracks the package as a whole and updates
-        // when the user returns to Settings/launcher after opening a hidden
-        // CAIXA via Settings → Apps → Open. Stale ACTIVITY_RESUMED events can
-        // keep "winning" after the user left; prefer stats when they disagree.
-        if (Boolean.FALSE.equals(fromStats)) return false;
-        if (Boolean.TRUE.equals(fromStats)) return true;
-
-        if (fromEvents != null) return fromEvents;
+        if (Boolean.TRUE.equals(fromStats) || Boolean.TRUE.equals(fromEvents)) return true;
+        if (Boolean.FALSE.equals(fromStats) && Boolean.FALSE.equals(fromEvents)) return false;
+        if (Boolean.FALSE.equals(fromStats) || Boolean.FALSE.equals(fromEvents)) {
+            // One side unsure/null, the other says left — keep paused.
+            Log.i(TAG, "mixed/partial leave signal — keep session");
+            return true;
+        }
 
         if (recentlyVisibleByStats(context, 30_000L)) {
             Log.i(TAG, "usage stats -> bank recently visible");
@@ -153,9 +155,8 @@ final class BankResume {
     }
 
     /**
-     * Package-level visibility: bank session active while a bank package's
-     * lastTimeVisible/used is at least as recent as any non-transient foreign
-     * app (Settings, launcher, Chrome, …).
+     * Package-level visibility with {@link #LEAVE_MARGIN_MS} so near-ties at
+     * launch do not count as leaving.
      */
     private static Boolean bankInSessionByStats(Context context) {
         try {
@@ -186,10 +187,11 @@ final class BankResume {
                 }
             }
             if (bestBank < 0L) return null;
-            boolean inSession = bestBank >= bestForeign;
+            long delta = bestForeign - bestBank;
+            boolean inSession = bestForeign < 0L || delta < LEAVE_MARGIN_MS;
             Log.i(TAG, "stats bank=" + bankPkg + "@" + bestBank
                     + " foreign=" + foreignPkg + "@" + bestForeign
-                    + " inSession=" + inSession);
+                    + " deltaMs=" + delta + " inSession=" + inSession);
             return inSession;
         } catch (Exception e) {
             Log.w(TAG, "usage stats session check failed", e);
@@ -232,10 +234,11 @@ final class BankResume {
                 }
             }
             if (lastBankResume < 0L) return null;
-            boolean inSession = lastBankResume >= lastForeignResume;
+            long delta = lastForeignResume - lastBankResume;
+            boolean inSession = lastForeignResume < 0L || delta < LEAVE_MARGIN_MS;
             Log.i(TAG, "lastBankResume=" + lastBankPkg + "@" + lastBankResume
                     + " lastForeign=" + lastForeignPkg + "@" + lastForeignResume
-                    + " inSession=" + inSession);
+                    + " deltaMs=" + delta + " inSession=" + inSession);
             return inSession;
         } catch (Exception e) {
             Log.w(TAG, "usage events failed", e);
