@@ -1,0 +1,9 @@
+/build/
+*.apk
+*.idsig
+*.keystore
+.idea/
+*.iml
+local.properties
+.DS_Store
+docs/evidence/caixa-*.png

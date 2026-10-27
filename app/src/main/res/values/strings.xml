@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DebugGuard</string>
+    <string name="safe_profile_label">Aplicar perfil seguro</string>
+    <string name="shortcut_safe_short">Perfil seguro</string>
+    <string name="shortcut_safe_long">Aplicar perfil seguro (gov/Caixa)</string>
+</resources>
