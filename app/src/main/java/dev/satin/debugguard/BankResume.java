@@ -116,18 +116,24 @@ final class BankResume {
     };
 
     /**
-     * Foreign app must beat the bank by this much to count as "left".
-     * Launch/CLEAR_TASK races left launcher ~6ms ahead of CAIXA while the user
-     * was still in the bank; Guard then restored after grace (1.4.5 log).
+     * Foreign must beat the bank by this much. Covers CLEAR_TASK races where
+     * launcher leads CAIXA by a few milliseconds (1.4.5).
      */
-    private static final long LEAVE_MARGIN_MS = 5_000L;
+    private static final long LEAVE_MARGIN_MS = 1_500L;
+
+    /**
+     * Leave only if the foreign package was active in wall-clock recently.
+     * Stale launcher stamps from the trampoline stay "ahead" forever; without
+     * freshness, a large margin blocked restore for minutes (1.4.6) and a tiny
+     * margin restored mid-session (1.4.5). Fresh Settings/launcher after the
+     * user returns ends the session; a 6ms-old launch blip does not.
+     */
+    private static final long FOREIGN_FRESH_MS = 20_000L;
 
     /**
      * Whether a bank session is still active.
      * <p>
-     * Fail closed toward "still in session" when signals disagree. A foreign
-     * package only ends the session when it is clearly newer than the bank
-     * ({@link #LEAVE_MARGIN_MS}), so trampoline/launcher blips do not restore ADB.
+     * Fail closed toward "still in session" when signals disagree.
      */
     static boolean isBankVisible(Context context) {
         Boolean fromStats = bankInSessionByStats(context);
@@ -137,7 +143,6 @@ final class BankResume {
         if (Boolean.TRUE.equals(fromStats) || Boolean.TRUE.equals(fromEvents)) return true;
         if (Boolean.FALSE.equals(fromStats) && Boolean.FALSE.equals(fromEvents)) return false;
         if (Boolean.FALSE.equals(fromStats) || Boolean.FALSE.equals(fromEvents)) {
-            // One side unsure/null, the other says left — keep paused.
             Log.i(TAG, "mixed/partial leave signal — keep session");
             return true;
         }
@@ -154,10 +159,7 @@ final class BankResume {
         return true;
     }
 
-    /**
-     * Package-level visibility with {@link #LEAVE_MARGIN_MS} so near-ties at
-     * launch do not count as leaving.
-     */
+    /** {@code true} = still in bank; {@code false} = fresh foreign lead. */
     private static Boolean bankInSessionByStats(Context context) {
         try {
             UsageStatsManager usm = context.getSystemService(UsageStatsManager.class);
@@ -187,16 +189,31 @@ final class BankResume {
                 }
             }
             if (bestBank < 0L) return null;
-            long delta = bestForeign - bestBank;
-            boolean inSession = bestForeign < 0L || delta < LEAVE_MARGIN_MS;
-            Log.i(TAG, "stats bank=" + bankPkg + "@" + bestBank
-                    + " foreign=" + foreignPkg + "@" + bestForeign
-                    + " deltaMs=" + delta + " inSession=" + inSession);
-            return inSession;
+            return decideSession(bankPkg, bestBank, foreignPkg, bestForeign, end, "stats");
         } catch (Exception e) {
             Log.w(TAG, "usage stats session check failed", e);
             return null;
         }
+    }
+
+    /**
+     * Leave only when foreign leads by {@link #LEAVE_MARGIN_MS} and that foreign
+     * stamp is within {@link #FOREIGN_FRESH_MS} of now.
+     */
+    private static boolean decideSession(
+            String bankPkg, long bestBank,
+            String foreignPkg, long bestForeign,
+            long now, String source) {
+        long delta = bestForeign - bestBank;
+        long foreignAge = bestForeign < 0L ? Long.MAX_VALUE : now - bestForeign;
+        boolean foreignFresh = bestForeign >= 0L && foreignAge >= 0L && foreignAge <= FOREIGN_FRESH_MS;
+        boolean foreignLeads = bestForeign >= 0L && delta >= LEAVE_MARGIN_MS;
+        boolean inSession = !(foreignFresh && foreignLeads);
+        Log.i(TAG, source + " bank=" + bankPkg + "@" + bestBank
+                + " foreign=" + foreignPkg + "@" + bestForeign
+                + " deltaMs=" + delta + " foreignAgeMs=" + foreignAge
+                + " fresh=" + foreignFresh + " inSession=" + inSession);
+        return inSession;
     }
 
     /**
@@ -234,12 +251,8 @@ final class BankResume {
                 }
             }
             if (lastBankResume < 0L) return null;
-            long delta = lastForeignResume - lastBankResume;
-            boolean inSession = lastForeignResume < 0L || delta < LEAVE_MARGIN_MS;
-            Log.i(TAG, "lastBankResume=" + lastBankPkg + "@" + lastBankResume
-                    + " lastForeign=" + lastForeignPkg + "@" + lastForeignResume
-                    + " deltaMs=" + delta + " inSession=" + inSession);
-            return inSession;
+            return decideSession(lastBankPkg, lastBankResume, lastForeignPkg, lastForeignResume,
+                    System.currentTimeMillis(), "events");
         } catch (Exception e) {
             Log.w(TAG, "usage events failed", e);
             return null;

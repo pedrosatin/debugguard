@@ -1,4 +1,4 @@
-# Como usar o DebugGuard 1.4.6
+# Como usar o DebugGuard 1.4.7
 
 Aparelho: Galaxy S25. Pacote: `dev.satin.debugguard`.
 
@@ -12,7 +12,7 @@ Ao abrir **Gov.br / CAIXA / FGTS**:
 
 1. Pausa de verdade: `development_settings_enabled`, `adb_enabled` e `adb_wifi_enabled` → `0`
 2. Reabre o app bancário (a Action da Samsung cancela a biometria; o relançamento devolve a tela)
-3. Quando **Settings/launcher/outro app** fica **claramente** mais recente que o banco (≥ 5 s) **ou** você toca em **Restaurar**, o ADB volta
+3. Quando **Settings/launcher** fica na frente **e** esse evento é recente (últimos ~20 s) **ou** você toca em **Restaurar**, o ADB volta (~10 s de confirmação)
 
 ## Notificações (1.4.5+)
 
@@ -21,9 +21,11 @@ Ao abrir **Gov.br / CAIXA / FGTS**:
 - No app: interruptor **Notificação extra de pausa**.
 - Para sumir da barra: Configurações → Apps → DebugGuard → Notificações → canal do Guard.
 
-**1.4.5:** restore rápido demais + empate launcher/CAIXA (~6 ms) religava ADB ~60 s no meio da sessão.
+**1.4.5:** empate launcher/CAIXA (~6 ms) → restore no meio da sessão.
 
-**1.4.6:** margem de 5 s para contar saída; polls de confirmação de volta ao ritmo da 1.4.4; notificações quietas mantidas. Rollback: `v1.4.4`.
+**1.4.6:** margem fixa de 5 s → sessão ok, mas restore podia ficar preso (>2 min) até Restaurar.
+
+**1.4.7:** saída = foreign **fresco** (≤20 s) e na frente (≥1,5 s). Blip do trampoline envelhece e para de contar; voltar ao Settings conta. Rollback: `v1.4.4`.
 
 ## Instalação
 

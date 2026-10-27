@@ -27,11 +27,11 @@ public final class GuardService extends Service {
     private static final String CHANNEL = "guard_silent";
     private static final String LEGACY_CHANNEL = "safe_profile_guard";
     private static final int NOTIFICATION_ID = 47;
-    private static final long POLL_MS = 3000L;
+    private static final long POLL_MS = 2000L;
     /** Wait this long after pause before allowing auto-restore. */
     private static final long MIN_PAUSE_MS = 60_000L;
-    /** Consecutive polls with bank not in session before restore (~30s). */
-    private static final int IDLE_POLLS_NEEDED = 10;
+    /** Consecutive polls with a fresh foreign lead before restore (~10s). */
+    private static final int IDLE_POLLS_NEEDED = 5;
 
     private ContentObserver observer;
     private final Handler handler = new Handler(Looper.getMainLooper());
