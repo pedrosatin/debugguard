@@ -16,6 +16,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -146,6 +147,35 @@ public final class MainActivity extends Activity {
         root.addView(gap(8));
         restoreButton = quietButton("Restaurar pausa");
         root.addView(restoreButton);
+        root.addView(gap(22));
+
+        root.addView(sectionTitle("Notificações"));
+        root.addView(gap(8));
+        root.addView(label(
+                "O Android exige um aviso mínimo enquanto o Guard roda (canal silencioso, sem som).",
+                12, colorMuted, false));
+        root.addView(gap(10));
+        LinearLayout notifRow = row();
+        notifRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView notifLabel = label("Notificação extra de pausa", 14, colorInk, false);
+        notifLabel.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Switch extraPauseSwitch = new Switch(this);
+        extraPauseSwitch.setChecked(Prefs.extraPauseNotification(this));
+        extraPauseSwitch.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.setExtraPauseNotification(this, checked);
+            if (!checked) Notifications.clear(this);
+            messageText.setText(checked
+                    ? "Notificação extra ligada (ainda silenciosa)."
+                    : "Só o aviso mínimo do Guard.");
+            messageText.setTextColor(colorMuted);
+        });
+        notifRow.addView(notifLabel);
+        notifRow.addView(extraPauseSwitch);
+        root.addView(notifRow);
+        root.addView(gap(6));
+        root.addView(label(
+                "Desligado = menos ícones. Em Configurações → Apps → DebugGuard → Notificações você pode ocultar o canal do Guard na barra.",
+                12, colorMuted, false));
         root.addView(gap(16));
 
         messageText = label("", 13, colorMuted, false);

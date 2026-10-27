@@ -23,13 +23,15 @@ import android.util.Log;
  */
 public final class GuardService extends Service {
     private static final String TAG = "DebugGuard.Guard";
-    private static final String CHANNEL = "safe_profile_guard";
+    /** New id: IMPORTANCE_MIN (legacy channel stayed LOW/noisy on upgrade). */
+    private static final String CHANNEL = "guard_silent";
+    private static final String LEGACY_CHANNEL = "safe_profile_guard";
     private static final int NOTIFICATION_ID = 47;
-    private static final long POLL_MS = 3000L;
+    private static final long POLL_MS = 2000L;
     /** Wait this long after pause before allowing auto-restore. */
     private static final long MIN_PAUSE_MS = 60_000L;
-    /** Consecutive polls with bank not in session before restore (~30s). */
-    private static final int IDLE_POLLS_NEEDED = 10;
+    /** Consecutive polls with bank not in session before restore (~4s). */
+    private static final int IDLE_POLLS_NEEDED = 2;
 
     private ContentObserver observer;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -200,9 +202,13 @@ public final class GuardService extends Service {
 
     private Notification buildNotification(boolean paused) {
         NotificationManager manager = getSystemService(NotificationManager.class);
+        manager.deleteNotificationChannel(LEGACY_CHANNEL);
         NotificationChannel channel = new NotificationChannel(
-                CHANNEL, "DebugGuard", NotificationManager.IMPORTANCE_LOW);
+                CHANNEL, "DebugGuard (silencioso)", NotificationManager.IMPORTANCE_MIN);
         channel.setShowBadge(false);
+        channel.setSound(null, null);
+        channel.enableVibration(false);
+        channel.enableLights(false);
         manager.createNotificationChannel(channel);
         PendingIntent open = PendingIntent.getActivity(
                 this, 0, new Intent(this, MainActivity.class),
@@ -211,17 +217,20 @@ public final class GuardService extends Service {
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(open)
                 .setOngoing(true)
-                .setOnlyAlertOnce(true);
+                .setOnlyAlertOnce(true)
+                .setDefaults(0)
+                .setSound(null)
+                .setCategory(Notification.CATEGORY_SERVICE);
         if (paused) {
             PendingIntent restore = PendingIntent.getBroadcast(
                     this, 1, new Intent(this, RestoreReceiver.class),
                     PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-            builder.setContentTitle("ADB pausado para o banco")
-                    .setContentText("Feche o banco e aguarde, ou toque em Restaurar")
+            builder.setContentTitle("ADB pausado")
+                    .setContentText("Aguardando saída do banco · Restaurar")
                     .addAction(new Notification.Action.Builder(null, "Restaurar", restore).build());
         } else {
-            builder.setContentTitle("Perfil seguro ativo")
-                    .setContentText("Indicador off · ADB ligado");
+            builder.setContentTitle("DebugGuard")
+                    .setContentText("Perfil seguro");
         }
         return builder.build();
     }
